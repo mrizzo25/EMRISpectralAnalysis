@@ -8,10 +8,10 @@ class DiscretizeSpectra(object):
     compute and bin spectrum of an EMRI waveform snapshot
     """
 
-    def __init__(self, params, bins, bin_range=[0.0, 0.014], power_cutoff=-5.):
+    def __init__(self, params, bins=None, bin_range=[0.0, 0.014], power_cutoff=-5.):
         """
         params: dict of params handed to AAK solver
-        bins: number of frequency bins
+        bins: number of frequency bins (if binning)
         bin_range: range of histogram
         power_cutoff: exponent of cutoff power
         """

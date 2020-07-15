@@ -62,6 +62,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--save-file", action='store_true', help="save data to file or not")
 parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
 parser.add_argument("--fname", type=str, help='filename of output')
+parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
 parsed, unknown = parser.parse_known_args()
 
 #accept additional params as emri params
@@ -89,6 +90,7 @@ for key in vars(args):
 #initialize spectra binning obj
 ds = DiscretizeSpectra(params)
 
+print(len(ds.t))
 
 fig, axs = plt.subplots(2, sharex=True)
 axs[0].set_title("GW Strain")
@@ -102,6 +104,10 @@ plt.tight_layout()
 
 if args.save_fig:
     plt.savefig("plots/"+args.fname+"_strain.png")
+else:
+    plt.show()
+    plt.close()
+
 
 mask = ds.freqs > 1e-16
 
@@ -115,10 +121,32 @@ plt.xlabel("Frequency (Hz)")
 plt.ylabel("Power")
 
 
+print(len(ds.freqs[mask]))
+
 if args.save_fig:
     plt.savefig("plots/"+args.fname+"_spec.png")
 else:
     plt.show()
+    plt.close()
+
+if args.scatter:
+
+    mask = ds.freqs > 1e-16
+
+    plt.figure()
+    plt.title("Power Spectrum")
+    #plt.scatter(ds.freqs, ds.power/sum(ds.power))
+    plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]), marker='o', linestyle='None', markersize=0.8)
+    plt.xlim(0, 0.02)
+    plt.ylim(1e-5, 1)
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Power")
+
+    if args.save_fig:
+        plt.savefig("plots/"+args.fname+"_spec_scatter.png") 
+    else:
+        plt.show()
+        plt.close()
 
 if args.save_file:
 

@@ -1,6 +1,6 @@
 #Monica Rizzo, 2020
 import numpy as np
-from generate_spectra import compute_fft
+from compute_wf_fft import compute_fft
 
 
 class DiscretizeSpectra(object):

@@ -60,7 +60,7 @@ param_grid_ranges = {'e': [0.0001, 0.9],
                      'iota': [0, 80*np.pi/180.],
                      'mu': [10, 100], 
                      'M': [1e6, 1e8], #might want to make this log valued
-                     's': [0.01, 0.99]}
+                     's': [0.001, 0.90]}
 
 
 ########### Main Class ##############
@@ -221,10 +221,10 @@ class GenerateSpectra(object):
 parser = argparse.ArgumentParser()
 parser.add_argument("--fname", type=str, help='filename of output')
 parser.add_argument("--existing", action='store_true', help="append to existing file")
-parser.add_argument("--grid-param", type=str, action="append", help="instruments used")
+parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
 parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
 #TODO: make this variable
-parser.add_argument("--n-grid", type=int, help="number of points on grid")
+parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
 parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")
 parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")
 parser.add_argument("--verbose", action='store_true', help="print extra debugging output")

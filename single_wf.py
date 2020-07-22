@@ -108,7 +108,7 @@ else:
     plt.show()
     plt.close()
 
-
+#fix this
 mask = ds.freqs > 1e-16
 
 plt.figure()
@@ -160,5 +160,8 @@ if args.save_file:
         exec("f.create_dataset('{}', data = params['{}'])"\
                 .format(p, p, p))
 
+    f.create_dataset('h_plus', data = ds.h_plus)
+    f.create_dataset('h_cross', data = ds.h_cross)
+    f.create_dataset('t', data = ds.t)
     f.create_dataset('frequencies', data = ds.freqs)
     f.create_dataset('power', data = ds.power)

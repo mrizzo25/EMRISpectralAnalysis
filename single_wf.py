@@ -2,6 +2,8 @@ import numpy as np
 from bin_spectra import DiscretizeSpectra
 import sys
 import h5py
+import os
+
 
 import matplotlib.pyplot as plt
 
@@ -63,6 +65,7 @@ parser.add_argument("--save-file", action='store_true', help="save data to file 
 parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
 parser.add_argument("--fname", type=str, help='filename of output')
 parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
+parser.add_argument("--overwrite", action='store_true', help="if data file exists, overwrite")
 parsed, unknown = parser.parse_known_args()
 
 #accept additional params as emri params
@@ -148,20 +151,28 @@ if args.scatter:
         plt.show()
         plt.close()
 
+
 if args.save_file:
 
-    output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
+    if args.fname+"_single_wf.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:
+        print("file already exists, not overwriting")
+    
+    else:
 
-    f = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
+        os.remove(os.getcwd()+"/data/"+args.fname+"_single_wf.hdf5")
+
+        output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
+
+        f = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
 
 
-    for p in output_params:
+        for p in output_params:
 
-        exec("f.create_dataset('{}', data = params['{}'])"\
+            exec("f.create_dataset('{}', data = params['{}'])"\
                 .format(p, p, p))
 
-    f.create_dataset('h_plus', data = ds.h_plus)
-    f.create_dataset('h_cross', data = ds.h_cross)
-    f.create_dataset('t', data = ds.t)
-    f.create_dataset('frequencies', data = ds.freqs)
-    f.create_dataset('power', data = ds.power)
+        f.create_dataset('h_plus', data = ds.h_plus)
+        f.create_dataset('h_cross', data = ds.h_cross)
+        f.create_dataset('t', data = ds.t)
+        f.create_dataset('frequencies', data = ds.freqs)
+        f.create_dataset('power', data = ds.power)

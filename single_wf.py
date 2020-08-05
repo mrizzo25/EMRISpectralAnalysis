@@ -159,7 +159,9 @@ if args.save_file:
     
     else:
 
-        os.remove(os.getcwd()+"/data/"+args.fname+"_single_wf.hdf5")
+        if args.fname+"_single_wf.hdf5" in os.listdir(os.getcwd()+"/data"):
+
+            os.remove(os.getcwd()+"/data/"+args.fname+"_single_wf.hdf5")
 
         output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
 

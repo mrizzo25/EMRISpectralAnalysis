@@ -89,9 +89,9 @@ class GenerateSpectra(object):
         #file to store data
         #actually implement append feature at some point
         if self.existing:
-            self.f = h5py.File(self.fname+".hdf5", "r+")
+            self.f = h5py.File("data/"+self.fname+".hdf5", "r+")
         else:
-            self.f = h5py.File(self.fname+".hdf5", "w-")
+            self.f = h5py.File("data/"+self.fname+".hdf5", "w-")
 
 
         #reassign initialization param values based on args

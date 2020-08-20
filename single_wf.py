@@ -93,8 +93,6 @@ for key in vars(args):
 #initialize spectra binning obj
 ds = DiscretizeSpectra(params)
 
-print(len(ds.t))
-
 fig, axs = plt.subplots(2, sharex=True)
 axs[0].set_title("GW Strain")
 axs[0].plot(ds.t, ds.h_plus)
@@ -111,8 +109,8 @@ else:
     plt.show()
     plt.close()
 
-#fix this
-mask = ds.freqs > 1e-16
+#this probably isn't necessary...
+mask = (ds.power/sum(ds.power)) > 1e-16
 
 plt.figure()
 plt.title("Power Spectrum")
@@ -123,8 +121,6 @@ plt.ylim(1e-5, 1)
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Power")
 
-
-print(len(ds.freqs[mask]))
 
 if args.save_fig:
     plt.savefig("plots/"+args.fname+"_spec.png")
@@ -166,6 +162,8 @@ if args.save_file:
         output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
 
         f = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
+        
+        print("saving to file:", args.fname+"_single_wf.hdf5")
 
 
         for p in output_params:

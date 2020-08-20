@@ -73,7 +73,10 @@ class GenerateSpectra(object):
 
         self.n_grid = args.n_grid
         self.grid_param = args.grid_param
-        
+        self.log_scale_param = args.log_scale_param
+        self.fix_sma = args.fix_sma
+
+
         self.binning = args.binning
         self.power_cutoff = args.power_cutoff
         
@@ -112,6 +115,9 @@ class GenerateSpectra(object):
 
         else:
             self.ds = DiscretizeSpectra(self.params, power_cutoff=self.power_cutoff)
+            
+            if self.verbose:
+                print("Spectra generation module initialized")
 
         #regardless of binning, store frequencies
         self.freqs = self.ds.freqs
@@ -135,10 +141,24 @@ class GenerateSpectra(object):
         for g in self.grid_param:
 
             #1D list
-            exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
-                .format(g, param_grid_ranges[g][0], \
-                param_grid_ranges[g][1], self.n_grid))
+
+            if g in self.log_scale_param:
+                if verbose:
+                    print("Generating log grid in", g)
+                
+                exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
+                    .format(g, np.log10(param_grid_ranges[g][0]), \
+                    np.log10(param_grid_ranges[g][1]), self.n_grid))
             
+            else:
+                if verbose:
+                    print("Generating grid in", g)
+
+                exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
+                    .format(g, param_grid_ranges[g][0], \
+                    param_grid_ranges[g][1], self.n_grid))
+
+
             #h5py dataset output
             exec("self.{}_dset = self.f.create_dataset('{}', ({:d},), dtype={})"\
                 .format(g, g, n_out, \
@@ -180,7 +200,15 @@ class GenerateSpectra(object):
             if self.verbose:
                 print("Param vals:", grid_pt_dict)
 
-            #there's probably a cleaner way to do these next few lines...
+            #option to fix semimajor axis (only matters if gridding in e)
+            if self.fix_sma is not None and 'e' in self.grid_param:
+                
+                #i might not even want to use this opt...
+                #add p to grid pt dict
+                grid_pt_dict['p'] = self.fix_sma * (1 - e**2)
+                    
+
+            #if binning the spectrum, do this    
             if self.binning:
                 try:
                     self.ds.change_parms(grid_pt_dict)
@@ -197,6 +225,7 @@ class GenerateSpectra(object):
 
                 self.hist_dset[i] = hist
 
+            #otherwise
             else:
                 try:
                     self.ds.change_params(grid_pt_dict)
@@ -222,6 +251,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--fname", type=str, help='filename of output')
 parser.add_argument("--existing", action='store_true', help="append to existing file")
 parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
+parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
+parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
 parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
 #TODO: make this variable
 parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
@@ -243,8 +274,38 @@ for arg in unknown:
 
         parser.add_argument(arg, type=param_type_dict[key])
 
+#accept params of the form "param-max" and "param-min"
+    elif arg.endswith("max") and arg.replace('--', '').split('-')[0] in params.keys():
+
+        parser.add_argument(arg, type=float)
+
+    elif arg.endswith("min") and arg.replace('--', '').split('-')[0] in params.keys():
+        
+        parser.add_argument(arg, type=float)
+
 args=parser.parse_args()
 
 ########## Script ################## 
+
+#take care of param_grid range adjustments
+for key in vars(args):
+
+    if key.endswith("max") and key.split('_')[0] in params.keys():
+
+        p = key.split('_')[0]
+        param_grid_ranges[p][1] = vars(args)[key]
+
+        if args.verbose:
+
+            print("Reassigning", p, "max:", vars(args)[key])
+
+    elif key.endswith("min") and key.split('-')[0] in params.keys(): 
+
+        p = key.split('-')[0]
+        param_grid_ranges[p][0] = vars(args)[key]
+
+        if args.verbose:
+
+            print("Reassigning", p, "min:", vars(args)[key])
 
 GenerateSpectra(args)

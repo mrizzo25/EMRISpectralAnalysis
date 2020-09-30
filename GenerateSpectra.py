@@ -75,7 +75,7 @@ class GenerateSpectra(object):
         self.grid_param = args.grid_param
         self.log_scale_param = args.log_scale_param
         self.fix_sma = args.fix_sma
-
+        self.p_isco_fraction = args.p_isco_fraction
 
         self.binning = args.binning
         self.power_cutoff = args.power_cutoff
@@ -143,7 +143,7 @@ class GenerateSpectra(object):
             #1D list
 
             if g in self.log_scale_param:
-                if verbose:
+                if self.verbose:
                     print("Generating log grid in", g)
                 
                 exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
@@ -151,7 +151,7 @@ class GenerateSpectra(object):
                     np.log10(param_grid_ranges[g][1]), self.n_grid))
             
             else:
-                if verbose:
+                if self.verbose:
                     print("Generating grid in", g)
 
                 exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
@@ -205,8 +205,23 @@ class GenerateSpectra(object):
                 
                 #i might not even want to use this opt...
                 #add p to grid pt dict
-                grid_pt_dict['p'] = self.fix_sma * (1 - e**2)
+                grid_pt_dict['p'] = self.fix_sma * (1 - grid_pt_dict['e']**2)
                     
+
+            #option to fix p/p_isco ratio (only matters if varying spin)
+            elif self.p_isco_fraction is not None and 's' in self.grid_param:
+                    
+                z1 = 1 + (1 - grid_pt_dict['s']**2)**(1/3) * \
+                        ((1 + grid_pt_dict['s'])**(1/3) + \
+                        (1 - grid_pt_dict['s'])**(1/3))
+
+                z2 = np.sqrt(3 * grid_pt_dict['s']**2 + z1**2)
+
+                #gonna assume everything is prograde
+                p_isco = 3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2))
+
+                grid_pt_dict['p'] = self.p_isco_fraction * p_isco
+                
 
             #if binning the spectrum, do this    
             if self.binning:
@@ -253,6 +268,7 @@ parser.add_argument("--existing", action='store_true', help="append to existing 
 parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
 parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
 parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
+parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
 parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
 #TODO: make this variable
 parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
@@ -299,9 +315,9 @@ for key in vars(args):
 
             print("Reassigning", p, "max:", vars(args)[key])
 
-    elif key.endswith("min") and key.split('-')[0] in params.keys(): 
+    elif key.endswith("min") and key.split('_')[0] in params.keys(): 
 
-        p = key.split('-')[0]
+        p = key.split('_')[0]
         param_grid_ranges[p][0] = vars(args)[key]
 
         if args.verbose:

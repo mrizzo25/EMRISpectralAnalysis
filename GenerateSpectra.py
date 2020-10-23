@@ -142,14 +142,22 @@ class GenerateSpectra(object):
 
             #1D list
 
-            if g in self.log_scale_param:
-                if self.verbose:
-                    print("Generating log grid in", g)
+            if self.log_scale_param is not None:
+                if g in self.log_scale_param:
+                    if self.verbose:
+                        print("Generating log grid in", g)
                 
-                exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
-                    .format(g, np.log10(param_grid_ranges[g][0]), \
-                    np.log10(param_grid_ranges[g][1]), self.n_grid))
+                    exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
+                        .format(g, np.log10(param_grid_ranges[g][0]), \
+                        np.log10(param_grid_ranges[g][1]), self.n_grid))
             
+                else:
+                    if self.verbose:
+                        print("Generating grid in", g)
+
+                    exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
+                        .format(g, param_grid_ranges[g][0], \
+                        param_grid_ranges[g][1], self.n_grid))
             else:
                 if self.verbose:
                     print("Generating grid in", g)

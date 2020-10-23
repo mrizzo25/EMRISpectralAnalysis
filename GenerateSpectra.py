@@ -78,6 +78,7 @@ class GenerateSpectra(object):
         self.p_isco_fraction = args.p_isco_fraction
 
         self.binning = args.binning
+        self.store_wf = args.store_wf
         self.power_cutoff = args.power_cutoff
         
         self.fname = args.fname
@@ -121,6 +122,10 @@ class GenerateSpectra(object):
 
         #regardless of binning, store frequencies
         self.freqs = self.ds.freqs
+
+        #if storing waveforms, store time values
+        if self.store_wf:
+            self.times = self.ds.t
 
         #run initialization and grid population methods
         self.initialize()
@@ -192,6 +197,13 @@ class GenerateSpectra(object):
         self.freq_dset = self.f.create_dataset("frequencies", data=self.freqs)
         self.power_dset = self.f.create_dataset("power", (n_out, len(self.freqs)), \
                 dtype=complex)
+        
+        if self.store_wf:
+            self.times = self.f.create_dataset("times", data=self.times)
+            self.hplus_dset = self.f.create_dataset("h_plus", \
+                    (n_out, len(self.times)), dtype=float)
+            self.hcross_dset = self.f.create_dataset("h_cross", \
+                    (n_out, len(self.times)), dtype=float)
 
 
     def evaluate_grid(self):
@@ -237,14 +249,22 @@ class GenerateSpectra(object):
                     self.ds.change_parms(grid_pt_dict)
                     hist, _ = self.ds.bin_spec()
                     power = self.ds.power
+        
+                    if self.store_wf:
+                        h_plus = self.ds.h_plus
+                        h_cross = self.ds.h_cross
 
                 except:
 
                     if self.verbose:
                         print("Point failed")
-
+                    
                     hist = np.zeros(self.n_bins)
                     power = np.zeros(len(self.freqs))
+                    
+                    if self.store_wf:
+                        h_cross = np.zeros(len(self.times))
+                        h_plus = np.zeros(len(self.times))
 
                 self.hist_dset[i] = hist
 
@@ -254,14 +274,27 @@ class GenerateSpectra(object):
                     self.ds.change_params(grid_pt_dict)
                     power = self.ds.power
 
+                    if self.store_wf:
+                        h_plus = self.ds.h_plus
+                        h_cross = self.ds.h_cross
+
                 except:
                     if self.verbose:
                         print("Point failed")
 
-
                     power = np.zeros(len(self.freqs))
+            
+                    if self.store_wf:
+                        h_cross = np.zeros(len(self.times))
+                        h_plus = np.zeros(len(self.times))
+
 
             self.power_dset[i] = power
+        
+            if self.store_wf:
+
+                self.hplus_dset[i] = h_plus
+                self.hcross_dset[i] = h_cross
 
             #add parameter values to dataset
             for key in grid_pt_dict:
@@ -278,6 +311,7 @@ parser.add_argument("--log-scale-param", type=str, action="append", help="use lo
 parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
 parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
 parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
+parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
 #TODO: make this variable
 parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
 parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")

@@ -66,6 +66,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--save-file", action='store_true', help="save data to file or not")
 parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
 parser.add_argument("--fname", type=str, help='filename of output')
+parser.add_argument("--use-cl", action='store_true', help="generate wf using command line")
 parser.add_argument("--output-phases", action='store_true', help='save phase data along with waveform data')
 parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
 parser.add_argument("--overwrite", action='store_true', help="if data file exists, overwrite")
@@ -94,12 +95,14 @@ for key in vars(args):
         print("Reassigning {}: {}".format(key, params[key]))
 
 #initialize spectra binning obj
-ds = DiscretizeSpectra(params)
+ds = DiscretizeSpectra(params, args.fname, args.use_cl)
 
 if args.output_phases:
     t, phase_r, phase_theta, phase_phi, omega_r, omega_theta, \
     omega_phi, eccentricity, _ = AAKwrapper.phase(params)
 
+
+#plot waveforms
 fig, axs = plt.subplots(2, figsize=(10, 6), sharex=True)
 axs[0].set_title("GW Strain")
 axs[0].plot(ds.t, ds.h_plus)
@@ -116,12 +119,12 @@ else:
     plt.show()
     plt.close()
 
-#this probably isn't necessary...
-mask = (ds.power/sum(ds.power)) > 1e-16
+
+#make plot for positive frequency data
+mask = ds.freqs > 1e-16
 
 plt.figure(figsize=(10, 6))
 plt.title("Power Spectrum")
-#plt.scatter(ds.freqs, ds.power/sum(ds.power))
 plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]))
 plt.xlim(0, 0.02)
 plt.ylim(1e-5, 1)
@@ -137,11 +140,11 @@ else:
 
 if args.scatter:
 
+    #make scatter plot for positive frequency data
     mask = ds.freqs > 1e-16
 
     plt.figure(figsize=(10, 6))
     plt.title("Power Spectrum")
-    #plt.scatter(ds.freqs, ds.power/sum(ds.power))
     plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]), marker='o', linestyle='None', markersize=3)
     plt.xlim(0, 0.02)
     plt.ylim(1e-5, 1)
@@ -155,6 +158,7 @@ if args.scatter:
         plt.close()
 
 
+#write output to file
 if args.save_file:
 
     if args.fname+"_single_wf.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:
@@ -185,6 +189,8 @@ if args.save_file:
         f_wf.create_dataset('frequencies', data = ds.freqs)
         f_wf.create_dataset('power', data = ds.power)
 
+
+#write phase info to file
 if args.output_phases and args.save_file:
 
     if args.fname+"_single_phases.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:

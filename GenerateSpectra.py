@@ -83,6 +83,7 @@ class GenerateSpectra(object):
         
         self.fname = args.fname
         self.existing = args.existing
+        self.use_cl = args.use_cl
 
         self.verbose = args.verbose
 
@@ -110,12 +111,14 @@ class GenerateSpectra(object):
         #initialize bins
         if self.binning:
             #initialize spectra binning obj
-            self.ds = DiscretizeSpectra(self.params, self.n_bins, \
+            self.ds = DiscretizeSpectra(self.params, self.fname, \
+                    use_cl=self.use_cl, bins=self.n_bins, \
                     power_cutoff=self.power_cutoff)
             _, self.bins = self.ds.bin_spec()
 
         else:
-            self.ds = DiscretizeSpectra(self.params, power_cutoff=self.power_cutoff)
+            self.ds = DiscretizeSpectra(self.params, self.fname, \
+                    use_cl=self.use_cl, power_cutoff=self.power_cutoff)
             
             if self.verbose:
                 print("Spectra generation module initialized")
@@ -246,7 +249,8 @@ class GenerateSpectra(object):
             #if binning the spectrum, do this    
             if self.binning:
                 try:
-                    self.ds.change_parms(grid_pt_dict)
+                    self.ds.change_parms(grid_pt_dict, self.fname+str(i), \
+                            use_cl=self.use_cl)
                     hist, _ = self.ds.bin_spec()
                     power = self.ds.power
         
@@ -271,7 +275,8 @@ class GenerateSpectra(object):
             #otherwise
             else:
                 try:
-                    self.ds.change_params(grid_pt_dict)
+                    self.ds.change_params(grid_pt_dict, self.fname+str(i), \
+                            use_cl=self.use_cl)
                     power = self.ds.power
 
                     if self.store_wf:
@@ -306,6 +311,7 @@ class GenerateSpectra(object):
 parser = argparse.ArgumentParser()
 parser.add_argument("--fname", type=str, help='filename of output')
 parser.add_argument("--existing", action='store_true', help="append to existing file")
+parser.add_argument("--use-cl", action='store_true', help="use command line waveform generation")
 parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
 parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
 parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")

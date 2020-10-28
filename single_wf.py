@@ -4,11 +4,13 @@ import sys
 import h5py
 import os
 
+import AAKwrapper
 
 import matplotlib.pyplot as plt
 
 import argparse
 
+plt.rcParams.update({'font.size': 16})
 
 #12 hours of data with default settings
 dt = 60*60*12/2000000
@@ -64,6 +66,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--save-file", action='store_true', help="save data to file or not")
 parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
 parser.add_argument("--fname", type=str, help='filename of output')
+parser.add_argument("--output-phases", action='store_true', help='save phase data along with waveform data')
 parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
 parser.add_argument("--overwrite", action='store_true', help="if data file exists, overwrite")
 parsed, unknown = parser.parse_known_args()
@@ -93,7 +96,11 @@ for key in vars(args):
 #initialize spectra binning obj
 ds = DiscretizeSpectra(params)
 
-fig, axs = plt.subplots(2, sharex=True)
+if args.output_phases:
+    t, phase_r, phase_theta, phase_phi, omega_r, omega_theta, \
+    omega_phi, eccentricity, _ = AAKwrapper.phase(params)
+
+fig, axs = plt.subplots(2, figsize=(10, 6), sharex=True)
 axs[0].set_title("GW Strain")
 axs[0].plot(ds.t, ds.h_plus)
 axs[0].set_ylabel("$h_+$")
@@ -112,7 +119,7 @@ else:
 #this probably isn't necessary...
 mask = (ds.power/sum(ds.power)) > 1e-16
 
-plt.figure()
+plt.figure(figsize=(10, 6))
 plt.title("Power Spectrum")
 #plt.scatter(ds.freqs, ds.power/sum(ds.power))
 plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]))
@@ -132,14 +139,14 @@ if args.scatter:
 
     mask = ds.freqs > 1e-16
 
-    plt.figure()
+    plt.figure(figsize=(10, 6))
     plt.title("Power Spectrum")
     #plt.scatter(ds.freqs, ds.power/sum(ds.power))
-    plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]), marker='o', linestyle='None', markersize=0.8)
+    plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]), marker='o', linestyle='None', markersize=3)
     plt.xlim(0, 0.02)
     plt.ylim(1e-5, 1)
     plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Power")
+    plt.ylabel("$\\frac{dE}{dt}$ / $\\frac{dE}{dt}_{\mathrm{total}}$")
 
     if args.save_fig:
         plt.savefig("plots/"+args.fname+"_spec_scatter.png") 
@@ -157,22 +164,48 @@ if args.save_file:
 
         if args.fname+"_single_wf.hdf5" in os.listdir(os.getcwd()+"/data"):
 
+            print("removing file and overwriting")
             os.remove(os.getcwd()+"/data/"+args.fname+"_single_wf.hdf5")
 
         output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
 
-        f = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
+        f_wf = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
         
         print("saving to file:", args.fname+"_single_wf.hdf5")
 
 
         for p in output_params:
 
-            exec("f.create_dataset('{}', data = params['{}'])"\
+            exec("f_wf.create_dataset('{}', data = params['{}'])"\
                 .format(p, p, p))
 
-        f.create_dataset('h_plus', data = ds.h_plus)
-        f.create_dataset('h_cross', data = ds.h_cross)
-        f.create_dataset('t', data = ds.t)
-        f.create_dataset('frequencies', data = ds.freqs)
-        f.create_dataset('power', data = ds.power)
+        f_wf.create_dataset('h_plus', data = ds.h_plus)
+        f_wf.create_dataset('h_cross', data = ds.h_cross)
+        f_wf.create_dataset('t', data = ds.t)
+        f_wf.create_dataset('frequencies', data = ds.freqs)
+        f_wf.create_dataset('power', data = ds.power)
+
+if args.output_phases and args.save_file:
+
+    if args.fname+"_single_phases.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:
+        print("file already exists, not overwriting")
+
+    else:
+
+        if args.fname+"_single_phases.hdf5" in os.listdir(os.getcwd()+"/data"):
+
+            print("removing file and overwriting")
+            os.remove(os.getcwd()+"/data/"+args.fname+"_single_phases.hdf5")
+
+        output_params = ['t', 'phase_r', 'phase_theta', 'phase_phi', 'omega_r', 'omega_theta', \
+                         'omega_phi', 'eccentricity']
+
+        f_phase = h5py.File("data/"+args.fname+"_single_phases.hdf5", "w-")
+
+        print("saving to file:", args.fname+"_single_phases.hdf5")
+
+
+        for p in output_params:
+
+            exec("f_phase.create_dataset('{}', data = {})"\
+                .format(p, p, p))

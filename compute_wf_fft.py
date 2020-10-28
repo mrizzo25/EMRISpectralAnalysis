@@ -5,7 +5,10 @@ import AAKwrapper
 from scipy import fftpack
 from scipy import signal
 
-def compute_fft(wf_params):
+from interface_w_cl import *
+
+
+def compute_fft(wf_params, use_cl=False, fname="example"):
     """
     For a set of default parameters, compute the 
     waveform and fft of a snapshot
@@ -16,8 +19,13 @@ def compute_fft(wf_params):
     #this should be a dictionary
     #make sure the keys match up
 
-    #generate waveform
-    t, h_plus, h_cross, timing = AAKwrapper.wave(wf_params)
+    if use_cl:
+        #generate wf from command line
+        parse_wf_opts(wf_params, fname)
+        t, h_plus, h_cross = run_cl_wf_generation(fname)
+    else:
+        #generate waveform
+        t, h_plus, h_cross, timing = AAKwrapper.wave(wf_params)
 
     #total signal as defined in Drasco
     h_total = h_plus - 1j * h_cross

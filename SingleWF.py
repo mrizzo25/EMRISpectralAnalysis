@@ -62,11 +62,20 @@ param_type_dict = {'backint': bool,
         'alpha': float,
         'D': float}
 
+class GenerateSingleSpectrum()
+
+    def __main__
+
+
+    def 
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--save-file", action='store_true', help="save data to file or not")
 parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
 parser.add_argument("--fname", type=str, help='filename of output')
 parser.add_argument("--use-cl", action='store_true', help="generate wf using command line")
+parser.add_argument("--angle-avg", action='store_true')
 parser.add_argument("--output-phases", action='store_true', help='save phase data along with waveform data')
 parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
 parser.add_argument("--overwrite", action='store_true', help="if data file exists, overwrite")
@@ -95,14 +104,24 @@ for key in vars(args):
         print("Reassigning {}: {}".format(key, params[key]))
 
 #initialize spectra binning obj
-ds = DiscretizeSpectra(params, args.fname, args.use_cl)
+if args.angle_avg:
+    #use angle averaging
+    ds = DiscretizeSpectra(params, fname=args.fname, use_cl=args.use_cl, \
+            angle_avg=args.angle_avg)
+else:
+    #no angle avg
+    ds = DiscretizeSpectra(params, fname=args.fname, use_cl=args.use_cl)
 
+#output aak phases
 if args.output_phases:
     t, phase_r, phase_theta, phase_phi, omega_r, omega_theta, \
     omega_phi, eccentricity, _ = AAKwrapper.phase(params)
 
 
+
+
 #plot waveforms
+#should really modify this to return a figure...
 fig, axs = plt.subplots(2, figsize=(10, 6), sharex=True)
 axs[0].set_title("GW Strain")
 axs[0].plot(ds.t, ds.h_plus)
@@ -113,6 +132,7 @@ axs[1].set_ylabel("$h_x$")
 axs[1].set_xlabel("t")
 plt.tight_layout()
 
+#save or show
 if args.save_fig:
     plt.savefig("plots/"+args.fname+"_strain.png")
 else:
@@ -129,17 +149,17 @@ plt.semilogy(ds.freqs[mask], ds.power[mask]/sum(ds.power[mask]))
 plt.xlim(0, 0.02)
 plt.ylim(1e-5, 1)
 plt.xlabel("Frequency (Hz)")
-plt.ylabel("Power")
+plt.ylabel("$\\frac{dE}{dt}$ / $\\frac{dE}{dt}_{\mathrm{total}}$")
 
-
+#save or show
 if args.save_fig:
     plt.savefig("plots/"+args.fname+"_spec.png")
 else:
     plt.show()
     plt.close()
 
+#also generate a scatter plot (easier to see spectral content)
 if args.scatter:
-
     #make scatter plot for positive frequency data
     mask = ds.freqs > 1e-16
 
@@ -161,6 +181,7 @@ if args.scatter:
 #write output to file
 if args.save_file:
 
+    #check to see if file exists + overwrite if specified
     if args.fname+"_single_wf.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:
         print("file already exists, not overwriting")
     
@@ -171,13 +192,15 @@ if args.save_file:
             print("removing file and overwriting")
             os.remove(os.getcwd()+"/data/"+args.fname+"_single_wf.hdf5")
 
+        #params to output
         output_params = ['e', 'iota', 'p', 'mu', 'M', 's']
 
+        #create output file
         f_wf = h5py.File("data/"+args.fname+"_single_wf.hdf5", "w-")
         
         print("saving to file:", args.fname+"_single_wf.hdf5")
 
-
+        #create and populate h5 datasets
         for p in output_params:
 
             exec("f_wf.create_dataset('{}', data = params['{}'])"\
@@ -192,6 +215,7 @@ if args.save_file:
 
 #write phase info to file
 if args.output_phases and args.save_file:
+
 
     if args.fname+"_single_phases.hdf5" in os.listdir(os.getcwd()+"/data") and not args.overwrite:
         print("file already exists, not overwriting")

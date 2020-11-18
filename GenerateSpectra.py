@@ -68,6 +68,12 @@ param_grid_ranges = {'e': [0.0001, 0.9],
 class GenerateSpectra(object):
 
     def __init__(self, args):
+        """
+        Takes argparse object *or* class with the appropriate 
+        attributes if running from an external script
+
+        see commandline --help for parameter definitions
+        """
 
         self.params = params
 

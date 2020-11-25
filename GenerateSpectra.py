@@ -69,13 +69,16 @@ class GenerateSpectra(object):
 
     def __init__(self, args):
         """
-        Takes argparse object *or* class with the appropriate 
-        attributes if running from an external script
+        Takes argparse object *or* class with 
+        the appropriate attributes if running from an external script
 
         see commandline --help for parameter definitions
         """
 
+        #local instances of params + grid ranges
         self.params = params
+        self.param_grid_ranges = param_grid_ranges
+        
 
         self.n_grid = args.n_grid
         self.grid_param = args.grid_param
@@ -112,7 +115,30 @@ class GenerateSpectra(object):
 
                 if self.verbose:
                     print("Reassigning {}: {}".format(key, self.params[key]))
+        
 
+        #take care of param_grid range adjustments
+        for key in vars(args):
+
+            #reassign min in param range
+            if key.endswith("max") and key.split('_')[0] in self.params.keys():
+
+                p = key.split('_')[0]
+                self.param_grid_ranges[p][1] = vars(args)[key]
+
+                if self.verbose:
+
+                    print("Reassigning", p, "max:", vars(args)[key])
+
+            #reassign max in param range
+            elif key.endswith("min") and key.split('_')[0] in self.params.keys():
+
+                p = key.split('_')[0]
+                self.param_grid_ranges[p][0] = vars(args)[key]
+
+                if self.verbose:
+
+                    print("Reassigning", p, "min:", vars(args)[key])
 
         #initialize bins
         if self.binning:
@@ -141,6 +167,7 @@ class GenerateSpectra(object):
         self.evaluate_grid()
 
 
+
     def initialize(self):
         """
         Set up parameter grid and output file datasets
@@ -162,23 +189,23 @@ class GenerateSpectra(object):
                         print("Generating log grid in", g)
                 
                     exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
-                        .format(g, np.log10(param_grid_ranges[g][0]), \
-                        np.log10(param_grid_ranges[g][1]), self.n_grid))
+                        .format(g, np.log10(self.param_grid_ranges[g][0]), \
+                        np.log10(self.param_grid_ranges[g][1]), self.n_grid))
             
                 else:
                     if self.verbose:
                         print("Generating grid in", g)
 
                     exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
-                        .format(g, param_grid_ranges[g][0], \
-                        param_grid_ranges[g][1], self.n_grid))
+                        .format(g, self.param_grid_ranges[g][0], \
+                        self.param_grid_ranges[g][1], self.n_grid))
             else:
                 if self.verbose:
                     print("Generating grid in", g)
 
                 exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
-                    .format(g, param_grid_ranges[g][0], \
-                    param_grid_ranges[g][1], self.n_grid))
+                    .format(g, self.param_grid_ranges[g][0], \
+                    self.param_grid_ranges[g][1], self.n_grid))
 
 
             #h5py dataset output
@@ -356,26 +383,5 @@ for arg in unknown:
 args=parser.parse_args()
 
 ########## Script ################## 
-
-#take care of param_grid range adjustments
-for key in vars(args):
-
-    if key.endswith("max") and key.split('_')[0] in params.keys():
-
-        p = key.split('_')[0]
-        param_grid_ranges[p][1] = vars(args)[key]
-
-        if args.verbose:
-
-            print("Reassigning", p, "max:", vars(args)[key])
-
-    elif key.endswith("min") and key.split('_')[0] in params.keys(): 
-
-        p = key.split('_')[0]
-        param_grid_ranges[p][0] = vars(args)[key]
-
-        if args.verbose:
-
-            print("Reassigning", p, "min:", vars(args)[key])
 
 GenerateSpectra(args)

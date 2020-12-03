@@ -40,7 +40,7 @@ class DiscretizeSpectra(object):
 
 
 
-    def change_params(self, change_params):
+    def change_params(self, change_params, fname="example", use_cl=False):
         """
         change_params: dict of parameters to change 
                     before recomputing wf
@@ -59,7 +59,7 @@ class DiscretizeSpectra(object):
         #recompute waveform and fft
         self.h_plus, self.h_cross, self.t, \
                 self.power, self.freqs = compute_fft(self._params, \
-                fname=self.fname, use_cl=self.use_cl)
+                fname=fname, use_cl=use_cl)
     
         if self.angle_avg:
 

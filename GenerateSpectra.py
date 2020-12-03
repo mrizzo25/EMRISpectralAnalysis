@@ -1,67 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
+import os
+
+import traceback
 
 from bin_spectra import DiscretizeSpectra
 
 import argparse
-
-########### Definitions ############
-
-#12 hours of data with default settings
-dt = 60*60*12/2000000
-
-#default params
-params = {'backint': False, #end @ plunge and integrate backward
-        'LISA': False, #convert to LISA response (Cutler 1998)
-        'length': 2000000, #waveform points
-        'dt': dt, #time step (s)
-        'p': 7.0, #initial semilatus rectum
-        'T': 1.166, #waveform dutation (yrs) *if dt unspecified
-        'f': 2.e-3, #reference GW freq (Hz) *if p unspecified
-        'T_fit': 1., #max duration of local fit (??)
-        'mu': 1.e1, #compact object mass (M_sun)
-        'M': 1.e6, #BH mass (M_sun)
-        's': 0.8, #BH spin (a/M)
-        'e': 0.0001, #initial eccentricity
-        'iota': 0.0, #inclination angle of L from S
-        'gamma': 0., #Initial angle of periapsis from LxS (?)
-        'psi': 0., #Initial true anomoly (?)
-        'theta_S': 0.785, #source polar angle in ecliptic coords (?)
-        'phi_S': 0.785, #source azimuthal angle in ecliptiv coords (?)
-        'theta_K': 1.05, #BH spin polar angle
-        'phi_K': 1.05, #BH spin azimuthal angle
-        'alpha': 0., #initial azimuthal orientation (Eq.(18) in Barack & Cutler, 2004)
-        'D': 1.} #source distance (Gpc)
-
-param_type_dict = {'backint': bool,
-        'LISA': bool, 
-        'length': int, 
-        'dt': float, 
-        'p': float, 
-        'T': float, 
-        'f': float, 
-        'T_fit': float, 
-        'mu': float, 
-        'M': float, 
-        's': float,
-        'e': float,
-        'iota': float, 
-        'gamma': float, 
-        'psi': float, 
-        'theta_S': float, 
-        'phi_S': float, 
-        'theta_K': float,
-        'phi_K': float,
-        'alpha': float, 
-        'D': float}
-
-param_grid_ranges = {'e': [0.0001, 0.9], 
-                     'iota': [0, 80*np.pi/180.],
-                     'mu': [10, 100], 
-                     'M': [1e6, 1e8], #might want to make this log valued
-                     's': [0.001, 0.90]}
-
 
 ########### Main Class ##############
 
@@ -76,15 +22,21 @@ class GenerateSpectra(object):
         """
 
         #local instances of params + grid ranges
-        self.params = params
-        self.param_grid_ranges = param_grid_ranges
+        self.params = self.__default_params()
+        self.param_grid_ranges = self.__default_grid_ranges()
         
 
         self.n_grid = args.n_grid
         self.grid_param = args.grid_param
         self.log_scale_param = args.log_scale_param
+        #explicitly cast bc commandline is weird abt reading types
         self.fix_sma = args.fix_sma
+        if self.fix_sma is not None:
+            self.fix_sma = float(self.fix_sma)
         self.p_isco_fraction = args.p_isco_fraction
+        if self.p_isco_fraction is not None:
+            self.p_isco_fraction = float(self.p_isco_fraction)
+
 
         self.binning = args.binning
         self.store_wf = args.store_wf
@@ -95,6 +47,7 @@ class GenerateSpectra(object):
         self.use_cl = args.use_cl
 
         self.verbose = args.verbose
+        self.overwrite = args.overwrite
 
         if self.binning:
             self.n_bins = args.n_bins
@@ -105,7 +58,15 @@ class GenerateSpectra(object):
         if self.existing:
             self.f = h5py.File("data/"+self.fname+".hdf5", "r+")
         else:
-            self.f = h5py.File("data/"+self.fname+".hdf5", "w-")
+            if self.fname+".hdf5" in os.listdir("data"):
+                if self.overwrite:
+                    os.remove("data/"+self.fname+".hdf5")
+                    self.f = h5py.File("data/"+self.fname+".hdf5", "w-")
+                else:
+                    raise FileExistsError("Please pick different file name, \
+                            or enable overwrite")
+            else:
+                self.f = h5py.File("data/"+self.fname+".hdf5", "w-")
 
 
         #reassign initialization param values based on args
@@ -166,6 +127,48 @@ class GenerateSpectra(object):
         self.initialize()
         self.evaluate_grid()
 
+    def __default_params(self):
+        """
+        Creates dict of default AAK params
+        """
+            
+        #default params
+        params = {'backint': False, #end @ plunge and integrate backward
+                'LISA': False, #convert to LISA response (Cutler 1998)
+                'length': 2000000, #waveform points
+                'dt': 0.0216, #time step (s)
+                'p': 7.0, #initial semilatus rectum
+                'T': 1.166, #waveform dutation (yrs) *if dt unspecified
+                'f': 2.e-3, #reference GW freq (Hz) *if p unspecified
+                'T_fit': 1., #max duration of local fit (??)
+                'mu': 1.e1, #compact object mass (M_sun)
+                'M': 1.e6, #BH mass (M_sun)
+                's': 0.8, #BH spin (a/M)
+                'e': 0.0001, #initial eccentricity
+                'iota': 0.0, #inclination angle of L from S
+                'gamma': 0., #Initial angle of periapsis from LxS (?)
+                'psi': 0., #Initial true anomoly (?)
+                'theta_S': 0.785, #source polar angle in ecliptic coords (?)
+                'phi_S': 0.785, #source azimuthal angle in ecliptiv coords (?)
+                'theta_K': 1.05, #BH spin polar angle
+                'phi_K': 1.05, #BH spin azimuthal angle
+                'alpha': 0., #initial azimuthal orientation (Eq.(18) in Barack & Cutler, 2004)
+                'D': 1.} #source distance (Gpc)
+
+        return params
+
+    def __default_grid_ranges(self):
+        """
+        Create dictionary of parameter grid ranges
+        """
+
+        param_grid_ranges = {'e': [0.0001, 0.9], 
+                     'iota': [0, 80*np.pi/180.],
+                     'mu': [10, 100], 
+                     'M': [1e6, 1e8], 
+                     's': [0.001, 0.90]}
+
+        return param_grid_ranges
 
 
     def initialize(self):
@@ -209,9 +212,8 @@ class GenerateSpectra(object):
 
 
             #h5py dataset output
-            exec("self.{}_dset = self.f.create_dataset('{}', ({:d},), dtype={})"\
-                .format(g, g, n_out, \
-                param_type_dict[g].__name__))
+            exec("self.{}_dset = self.f.create_dataset('{}', ({:d},), dtype=float)"\
+                .format(g, g, n_out))
     
             if self.verbose:
                 print("Creating grid data for: {}".format(g))
@@ -282,7 +284,7 @@ class GenerateSpectra(object):
             #if binning the spectrum, do this    
             if self.binning:
                 try:
-                    self.ds.change_parms(grid_pt_dict, self.fname+str(i), \
+                    self.ds.change_parms(grid_pt_dict, fname=self.fname+str(i), \
                             use_cl=self.use_cl)
                     hist, _ = self.ds.bin_spec()
                     power = self.ds.power
@@ -294,10 +296,11 @@ class GenerateSpectra(object):
                 except:
 
                     if self.verbose:
+                        traceback.print_exc()
                         print("Point failed")
                     
                     hist = np.zeros(self.n_bins)
-                    power = np.zeros(len(self.freqs))
+                    power = np.zeros(len(self.freqs), dtype=complex)
                     
                     if self.store_wf:
                         h_cross = np.zeros(len(self.times))
@@ -308,7 +311,7 @@ class GenerateSpectra(object):
             #otherwise
             else:
                 try:
-                    self.ds.change_params(grid_pt_dict, self.fname+str(i), \
+                    self.ds.change_params(grid_pt_dict, fname=self.fname+str(i), \
                             use_cl=self.use_cl)
                     power = self.ds.power
 
@@ -318,9 +321,10 @@ class GenerateSpectra(object):
 
                 except:
                     if self.verbose:
+                        traceback.print_exc()
                         print("Point failed")
 
-                    power = np.zeros(len(self.freqs))
+                    power = np.zeros(len(self.freqs), dtype=complex)
             
                     if self.store_wf:
                         h_cross = np.zeros(len(self.times))
@@ -336,52 +340,91 @@ class GenerateSpectra(object):
 
             #add parameter values to dataset
             for key in grid_pt_dict:
-                exec("self.{}_dset[{:d}] = {}".format(key, i, grid_pt_dict[key]))
+                
+                if key == 'p' and (self.p_isco_fraction is not None or self.fix_sma is not None):
+                    pass
+                else:
+                    exec("self.{}_dset[{:d}] = {}".format(key, i, grid_pt_dict[key]))
 
 
-########## Parser ##################
+def parser():
+    """
+    Argument parsing
+    """
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--fname", type=str, help='filename of output')
-parser.add_argument("--existing", action='store_true', help="append to existing file")
-parser.add_argument("--use-cl", action='store_true', help="use command line waveform generation")
-parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
-parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
-parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
-parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
-parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
-parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
-#TODO: make this variable
-parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
-parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")
-parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")
-parser.add_argument("--verbose", action='store_true', help="print extra debugging output")
-parsed, unknown = parser.parse_known_args() 
+    #dictionary of AAK wrapper param types
+    param_type_dict = {'backint': bool,
+        'LISA': bool, 
+        'length': int, 
+        'dt': float, 
+        'p': float, 
+        'T': float, 
+        'f': float, 
+        'T_fit': float, 
+        'mu': float, 
+        'M': float, 
+        's': float,
+        'e': float,
+        'iota': float, 
+        'gamma': float, 
+        'psi': float, 
+        'theta_S': float, 
+        'phi_S': float, 
+        'theta_K': float,
+        'phi_K': float,
+        'alpha': float, 
+        'D': float}
 
-#accept additional params as emri params
-for arg in unknown:
+
+    ########## Parser ##################
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fname", type=str, help='filename of output')
+    parser.add_argument("--existing", action='store_true', help="append to existing file")
+    parser.add_argument("--use-cl", action='store_true', help="use command line waveform generation")
+    parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
+    parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
+    parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
+    parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
+    parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
+    parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
+    #TODO: make this variable
+    parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
+    parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")
+    parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")
+    parser.add_argument("--overwrite", action='store_true', help="if output data file already exists, overwrite it")
+    parser.add_argument("--verbose", action='store_true', help="print extra debugging output")
+    parsed, unknown = parser.parse_known_args() 
+
+    #accept additional params as emri params
+    for arg in unknown:
     
-    if arg.startswith(("--", "-")) and (arg.replace('--', '') in params.keys() or \
-            arg.replace('-', '') in params.keys()):
+        if arg.startswith(("--", "-")) and (arg.replace('--', '') in param_type_dict.keys() or \
+                arg.replace('-', '') in param_type_dict.keys()):
 
-        if arg.startswith("--"):
-            key = arg.replace('--', '')
-        else:
-            key = arg.replace('-', '')
+            if arg.startswith("--"):
+                key = arg.replace('--', '')
+            else:
+                key = arg.replace('-', '')
 
-        parser.add_argument(arg, type=param_type_dict[key])
+            parser.add_argument(arg, type=param_type_dict[key])
 
-#accept params of the form "param-max" and "param-min"
-    elif arg.endswith("max") and arg.replace('--', '').split('-')[0] in params.keys():
+        #accept params of the form "param-max" and "param-min"
+        elif arg.endswith("max") and arg.replace('--', '').split('-')[0] in param_type_dict.keys():
 
-        parser.add_argument(arg, type=float)
+            parser.add_argument(arg, type=float)
 
-    elif arg.endswith("min") and arg.replace('--', '').split('-')[0] in params.keys():
+        elif arg.endswith("min") and arg.replace('--', '').split('-')[0] in param_type_dict.keys():
         
-        parser.add_argument(arg, type=float)
+            parser.add_argument(arg, type=float)
 
-args=parser.parse_args()
+    args = parser.parse_args()
+    return args
 
-########## Script ################## 
 
-GenerateSpectra(args)
+if __name__ == "__main__":
+
+    ########## Script ################## 
+
+    args = parser()
+    GenerateSpectra(args)

@@ -3,6 +3,11 @@ import matplotlib.pyplot as plt
 import h5py
 import os
 
+#astrophysical constants (for conversion)
+import astropy.constants as const
+G_SI = const.G.value
+C_SI = const.c.value
+
 import traceback
 
 from bin_spectra import DiscretizeSpectra
@@ -24,16 +29,30 @@ class GenerateSpectra(object):
         #local instances of params + grid ranges
         self.params = self.__default_params()
         self.param_grid_ranges = self.__default_grid_ranges()
-        
 
-        self.n_grid = args.n_grid
         self.grid_param = args.grid_param
+        
+        #same number of pts for each param
+        if len(args.n_grid) == 1:
+            self.n_grid = list(np.ones(len(self.grid_param), dtype=int) * args.n_grid[0])
+        
+        #different number for each param
+        else:
+            
+            #check to make sure len matches number of parameters
+            if len(args.n_grid) != len(self.grid_param):
+                raise AssertionError("Number of grid dimensions needs to match \
+                        number of grid parameters")
+            
+            self.n_grid = args.n_grid
+       
+
+        #which params to log scale, if any
         self.log_scale_param = args.log_scale_param
-        #explicitly cast bc commandline is weird abt reading types
-        self.fix_sma = args.fix_sma
-        if self.fix_sma is not None:
-            self.fix_sma = float(self.fix_sma)
+        
         self.p_isco_fraction = args.p_isco_fraction
+        self.p_mb_fraction = args.p_mb_fraction
+
         if self.p_isco_fraction is not None:
             self.p_isco_fraction = float(self.p_isco_fraction)
 
@@ -82,7 +101,7 @@ class GenerateSpectra(object):
         for key in vars(args):
 
             #reassign min in param range
-            if key.endswith("max") and key.split('_')[0] in self.params.keys():
+            if key.endswith("max") and key.split('_')[0] in self.param_grid_ranges.keys():
 
                 p = key.split('_')[0]
                 self.param_grid_ranges[p][1] = vars(args)[key]
@@ -92,7 +111,7 @@ class GenerateSpectra(object):
                     print("Reassigning", p, "max:", vars(args)[key])
 
             #reassign max in param range
-            elif key.endswith("min") and key.split('_')[0] in self.params.keys():
+            elif key.endswith("min") and key.split('_')[0] in self.param_grid_ranges.keys():
 
                 p = key.split('_')[0]
                 self.param_grid_ranges[p][0] = vars(args)[key]
@@ -165,27 +184,28 @@ class GenerateSpectra(object):
         param_grid_ranges = {'e': [0.0001, 0.9], 
                      'iota': [0, 80*np.pi/180.],
                      'mu': [10, 100], 
-                     'M': [1e6, 1e8], 
-                     's': [0.001, 0.90]}
+                     'M': [1e5, 1e7], 
+                     's': [0.001, 0.90], 
+                     'piscofrac': [1.5, 3],
+                     'pmbfrac': [1.5, 3],
+                     'p': [6.0, 10.0]}
 
         return param_grid_ranges
-
 
     def initialize(self):
         """
         Set up parameter grid and output file datasets
         """
         #total number of grid points
-        n_out = self.n_grid**len(self.grid_param)
+        n_out = np.prod(self.n_grid)
 
         if self.verbose:
             print("Total number of grid pts: {}".format(n_out))
 
         #make list of parameter pairs to iterate over
-        for g in self.grid_param:
+        for g, n in zip(self.grid_param, self.n_grid):
 
             #1D list
-
             if self.log_scale_param is not None:
                 if g in self.log_scale_param:
                     if self.verbose:
@@ -193,7 +213,7 @@ class GenerateSpectra(object):
                 
                     exec("{}_vals = np.logspace({:f}, {:f}, {:d})"\
                         .format(g, np.log10(self.param_grid_ranges[g][0]), \
-                        np.log10(self.param_grid_ranges[g][1]), self.n_grid))
+                        np.log10(self.param_grid_ranges[g][1]), n))
             
                 else:
                     if self.verbose:
@@ -201,14 +221,14 @@ class GenerateSpectra(object):
 
                     exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
                         .format(g, self.param_grid_ranges[g][0], \
-                        self.param_grid_ranges[g][1], self.n_grid))
+                        self.param_grid_ranges[g][1], n))
             else:
                 if self.verbose:
                     print("Generating grid in", g)
 
                 exec("{}_vals = np.linspace({:f}, {:f}, {:d})"\
                     .format(g, self.param_grid_ranges[g][0], \
-                    self.param_grid_ranges[g][1], self.n_grid))
+                    self.param_grid_ranges[g][1], n))
 
 
             #h5py dataset output
@@ -223,7 +243,7 @@ class GenerateSpectra(object):
             .format(', '.join([p.upper() for p in self.grid_param]), \
                     ', '.join([p+'_vals' for p in self.grid_param])))
 
-        #lol
+        #create an array of parameter set values at every grid point
         exec("self.param_set = np.array(list(map(list, zip({}))))"\
             .format(', '.join([p.upper()+'.ravel()' for p in self.grid_param])))
 
@@ -255,36 +275,91 @@ class GenerateSpectra(object):
             #dict of param values at a given grid point
             grid_pt_dict = dict(zip(self.grid_param, self.param_set[i, :]))
 
+            reassign_params = grid_pt_dict.copy()
+
             if self.verbose:
                 print("Param vals:", grid_pt_dict)
-
-            #option to fix semimajor axis (only matters if gridding in e)
-            if self.fix_sma is not None and 'e' in self.grid_param:
-                
-                #i might not even want to use this opt...
-                #add p to grid pt dict
-                grid_pt_dict['p'] = self.fix_sma * (1 - grid_pt_dict['e']**2)
-                    
+                  
 
             #option to fix p/p_isco ratio (only matters if varying spin)
-            elif self.p_isco_fraction is not None and 's' in self.grid_param:
-                    
-                z1 = 1 + (1 - grid_pt_dict['s']**2)**(1/3) * \
-                        ((1 + grid_pt_dict['s'])**(1/3) + \
-                        (1 - grid_pt_dict['s'])**(1/3))
+            #also valid of piscofrac is a grid parameter
+            if self.p_isco_fraction is not None or 'piscofrac' in self.grid_param:
 
-                z2 = np.sqrt(3 * grid_pt_dict['s']**2 + z1**2)
+                #if 's' not a grid parameter, use the static value
+                if 's' in self.grid_param:
+                    s = grid_pt_dict['s']
+                else:
+                    s = self.params['s']
+
+                #equations grabbed from wikipedia
+                z1 = 1 + (1 - s**2)**(1/3) * \
+                        ((1 + s)**(1/3) + \
+                        (1 - s)**(1/3))
+
+                z2 = np.sqrt(3 * s**2 + z1**2)
 
                 #gonna assume everything is prograde
-                p_isco = 3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2))
+                #this is actually r/M
+                #r_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
+                p_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
 
-                grid_pt_dict['p'] = self.p_isco_fraction * p_isco
-                
+                #if self.verbose:
+                #    print("r_isco=", r_isco)
+
+                #now convert to p/m
+                #if 'e' in self.grid_param:
+                #    p_isco = r_isco * (1. - grid_pt_dict['e']**2)
+                #else:
+                #    p_isco = r_isco * (1 - self.params['e']**2)
+
+                #assign according to grid parameter
+                if 'piscofrac' in self.grid_param:
+                    reassign_params['p'] = grid_pt_dict['piscofrac'] * p_isco
+                    
+                    reassign_params.pop('piscofrac')
+
+                    if self.verbose:
+                        print("Setting p =", reassign_params['p'], "for p_isco_frac", grid_pt_dict['piscofrac'])
+        
+                #or else use the fixed value
+                else:
+                    reassign_params['p'] = self.p_isco_fraction * p_isco
+            
+                    if self.verbose:
+                        print("Setting p =", reassign_params['p'], "for p_isco_frac", self.p_isco_fraction)
+           
+           
+            if self.p_mb_fraction is not None or 'pmbfrac' in self.grid_param:
+
+                #if 's' not a grid parameter, use the static value
+                if 's' in self.grid_param:
+                    s = grid_pt_dict['s']
+                else:
+                    s = self.params['s']
+                    
+                p_mb = 2 - s + 2 * (1 - s)**0.5
+
+                if 'pmbfrac' in self.grid_param:
+                    reassign_params['p'] = grid_pt_dict['pmbfrac'] * p_mb
+
+                    reassign_params.pop('pmbfrac')
+
+                    if self.verbose:
+                        print("Setting p =", reassign_params['p'], "for p_mb_frac", grid_pt_dict['pmbfrac'])
+
+                #or else use the fixed value
+                else:
+                    reassign_params['p'] = self.p_mb_fraction * p_isco
+
+                    if self.verbose:
+                        print("Setting p =", reassign_params['p'], "for p_mb_frac", self.p_mb_fraction)
+
 
             #if binning the spectrum, do this    
             if self.binning:
                 try:
-                    self.ds.change_parms(grid_pt_dict, fname=self.fname+str(i), \
+
+                    self.ds.change_parms(reassign_params, fname=self.fname+str(i), \
                             use_cl=self.use_cl)
                     hist, _ = self.ds.bin_spec()
                     power = self.ds.power
@@ -311,7 +386,8 @@ class GenerateSpectra(object):
             #otherwise
             else:
                 try:
-                    self.ds.change_params(grid_pt_dict, fname=self.fname+str(i), \
+                    
+                    self.ds.change_params(reassign_params, fname=self.fname+str(i), \
                             use_cl=self.use_cl)
                     power = self.ds.power
 
@@ -341,10 +417,7 @@ class GenerateSpectra(object):
             #add parameter values to dataset
             for key in grid_pt_dict:
                 
-                if key == 'p' and (self.p_isco_fraction is not None or self.fix_sma is not None):
-                    pass
-                else:
-                    exec("self.{}_dset[{:d}] = {}".format(key, i, grid_pt_dict[key]))
+                exec("self.{}_dset[{:d}] = {}".format(key, i, grid_pt_dict[key]))
 
 
 def parser():
@@ -373,7 +446,9 @@ def parser():
         'theta_K': float,
         'phi_K': float,
         'alpha': float, 
-        'D': float}
+        'D': float, 
+        'piscofrac': float,
+        'pmbfrac': float}
 
 
     ########## Parser ##################
@@ -384,14 +459,14 @@ def parser():
     parser.add_argument("--use-cl", action='store_true', help="use command line waveform generation")
     parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
     parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
-    parser.add_argument("--fix-sma", default=None, help="fix the semi-major axis value (only relevant if gridding in e)")
     parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
+    parser.add_argument("--p-mb-fraction", default=None, help="fix value of marginally bound radius")
     parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
     parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
-    #TODO: make this variable
-    parser.add_argument("--n-grid", type=int, help="number of points for each param on grid")
+    parser.add_argument("--n-grid", nargs="+", type=int, help="number of points for each param on grid")
     parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")
     parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")
+    parser.add_argument("--filter", default=None, type=str, help="Not implemented yet: functions to filter points ('band_cut', 'snr_cut')")
     parser.add_argument("--overwrite", action='store_true', help="if output data file already exists, overwrite it")
     parser.add_argument("--verbose", action='store_true', help="print extra debugging output")
     parsed, unknown = parser.parse_known_args() 

@@ -10,7 +10,7 @@ C_SI = const.c.value
 
 import traceback
 
-from bin_spectra import DiscretizeSpectra
+from GenerateWF import WFGen
 
 import argparse
 
@@ -56,8 +56,6 @@ class GenerateSpectra(object):
         if self.p_isco_fraction is not None:
             self.p_isco_fraction = float(self.p_isco_fraction)
 
-
-        self.binning = args.binning
         self.store_wf = args.store_wf
         self.power_cutoff = args.power_cutoff
         
@@ -67,9 +65,6 @@ class GenerateSpectra(object):
 
         self.verbose = args.verbose
         self.overwrite = args.overwrite
-
-        if self.binning:
-            self.n_bins = args.n_bins
 
 
         #file to store data
@@ -120,20 +115,12 @@ class GenerateSpectra(object):
 
                     print("Reassigning", p, "min:", vars(args)[key])
 
-        #initialize bins
-        if self.binning:
-            #initialize spectra binning obj
-            self.ds = DiscretizeSpectra(self.params, self.fname, \
-                    use_cl=self.use_cl, bins=self.n_bins, \
-                    power_cutoff=self.power_cutoff)
-            _, self.bins = self.ds.bin_spec()
-
-        else:
-            self.ds = DiscretizeSpectra(self.params, self.fname, \
+        
+        self.ds = DiscretizeSpectra(self.params, self.fname, \
                     use_cl=self.use_cl, power_cutoff=self.power_cutoff)
             
-            if self.verbose:
-                print("Spectra generation module initialized")
+        if self.verbose:
+            print("Spectra generation module initialized")
 
         #regardless of binning, store frequencies
         self.freqs = self.ds.freqs
@@ -247,10 +234,6 @@ class GenerateSpectra(object):
         exec("self.param_set = np.array(list(map(list, zip({}))))"\
             .format(', '.join([p.upper()+'.ravel()' for p in self.grid_param])))
 
-        #create other h5 datasets 
-        if self.binning:
-            self.bin_dset = self.f.create_dataset("bin_edges", data = self.bins)
-            self.hist_dset = self.f.create_dataset("hist", (n_out, self.n_bins))
             
         self.freq_dset = self.f.create_dataset("frequencies", data=self.freqs)
         self.power_dset = self.f.create_dataset("power", (n_out, len(self.freqs)), \
@@ -355,56 +338,27 @@ class GenerateSpectra(object):
                         print("Setting p =", reassign_params['p'], "for p_mb_frac", self.p_mb_fraction)
 
 
-            #if binning the spectrum, do this    
-            if self.binning:
-                try:
-
-                    self.ds.change_parms(reassign_params, fname=self.fname+str(i), \
+            try:
+                    
+                self.ds.change_params(reassign_params, fname=self.fname+str(i), \
                             use_cl=self.use_cl)
-                    hist, _ = self.ds.bin_spec()
-                    power = self.ds.power
-        
-                    if self.store_wf:
-                        h_plus = self.ds.h_plus
-                        h_cross = self.ds.h_cross
+                power = self.ds.power
 
-                except:
+                if self.store_wf:
+                    h_plus = self.ds.h_plus
+                    h_cross = self.ds.h_cross
 
-                    if self.verbose:
-                        traceback.print_exc()
-                        print("Point failed")
-                    
-                    hist = np.zeros(self.n_bins)
-                    power = np.zeros(len(self.freqs), dtype=complex)
-                    
-                    if self.store_wf:
-                        h_cross = np.zeros(len(self.times))
-                        h_plus = np.zeros(len(self.times))
+            except:
 
-                self.hist_dset[i] = hist
+                if self.verbose:
+                    traceback.print_exc()
+                    print("Point failed")
 
-            #otherwise
-            else:
-                try:
-                    
-                    self.ds.change_params(reassign_params, fname=self.fname+str(i), \
-                            use_cl=self.use_cl)
-                    power = self.ds.power
-
-                    if self.store_wf:
-                        h_plus = self.ds.h_plus
-                        h_cross = self.ds.h_cross
-
-                except:
-                    if self.verbose:
-                        traceback.print_exc()
-                        print("Point failed")
-
-                    power = np.zeros(len(self.freqs), dtype=complex)
+                power = np.zeros(len(self.freqs), dtype=complex)
             
-                    if self.store_wf:
-                        h_cross = np.zeros(len(self.times))
-                        h_plus = np.zeros(len(self.times))
+                if self.store_wf:
+                    h_cross = np.zeros(len(self.times))
+                    h_plus = np.zeros(len(self.times))
 
 
             self.power_dset[i] = power
@@ -461,10 +415,8 @@ def parser():
     parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
     parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
     parser.add_argument("--p-mb-fraction", default=None, help="fix value of marginally bound radius")
-    parser.add_argument("--binning", action='store_true', help="whether or not to bin spectra")
     parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
     parser.add_argument("--n-grid", nargs="+", type=int, help="number of points for each param on grid")
-    parser.add_argument("--n-bins", type=int, default=500, help="number of spectral bins (evenly spaced), defaults to 500")
     parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")
     parser.add_argument("--filter", default=None, type=str, help="Not implemented yet: functions to filter points ('band_cut', 'snr_cut')")
     parser.add_argument("--overwrite", action='store_true', help="if output data file already exists, overwrite it")

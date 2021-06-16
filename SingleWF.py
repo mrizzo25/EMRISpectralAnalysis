@@ -1,5 +1,5 @@
 import numpy as np
-from bin_spectra import DiscretizeSpectra
+from GenerateWF import WFGen
 import sys
 import h5py
 import os

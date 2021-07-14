@@ -50,11 +50,18 @@ class GenerateSpectra(object):
         #which params to log scale, if any
         self.log_scale_param = args.log_scale_param
         
-        self.p_isco_fraction = args.p_isco_fraction
-        self.p_mb_fraction = args.p_mb_fraction
-
         if self.p_isco_fraction is not None:
             self.p_isco_fraction = float(self.p_isco_fraction)
+
+        if self.p_mb_fraction is not None:
+            self.p_mb_fraction = float(self.p_mb_fraction)
+
+        if self.fix_sma is not None:
+            self.fix_sma = float(self.fix_sma)
+
+        self.p_isco_fraction = args.p_isco_fraction
+        self.p_mb_fraction = args.p_mb_fraction
+        self.fix_sma = args.fix_sma
 
         self.store_wf = args.store_wf
         self.power_cutoff = args.power_cutoff
@@ -268,76 +275,19 @@ class GenerateSpectra(object):
             #also valid of piscofrac is a grid parameter
             if self.p_isco_fraction is not None or 'piscofrac' in self.grid_param:
 
-                #if 's' not a grid parameter, use the static value
-                if 's' in self.grid_param:
-                    s = grid_pt_dict['s']
-                else:
-                    s = self.params['s']
+                reassign_params = self.fractional_p_isco(reassign_params, grid_pt_dict)
 
-                #equations grabbed from wikipedia
-                z1 = 1 + (1 - s**2)**(1/3) * \
-                        ((1 + s)**(1/3) + \
-                        (1 - s)**(1/3))
+            elif self.p_mb_fraction is not None or 'pmbfrac' in self.grid_param:
 
-                z2 = np.sqrt(3 * s**2 + z1**2)
+                reassign_params = self.fractional_p_mb(reassign_params, grid_pt_dict)
 
-                #gonna assume everything is prograde
-                #this is actually r/M
-                #r_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
-                p_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
+            elif self.fix_sma is not None of 'fixsma' in self.grid_param:
 
-                #if self.verbose:
-                #    print("r_isco=", r_isco)
+                reassign_params = self.fix_semimajor_axis(reassign_params, grid_pt_dict)
+           
 
-                #now convert to p/m
-                #if 'e' in self.grid_param:
-                #    p_isco = r_isco * (1. - grid_pt_dict['e']**2)
-                #else:
-                #    p_isco = r_isco * (1 - self.params['e']**2)
-
-                #assign according to grid parameter
-                if 'piscofrac' in self.grid_param:
-                    reassign_params['p'] = grid_pt_dict['piscofrac'] * p_isco
-                    
-                    reassign_params.pop('piscofrac')
-
-                    if self.verbose:
-                        print("Setting p =", reassign_params['p'], "for p_isco_frac", grid_pt_dict['piscofrac'])
         
-                #or else use the fixed value
-                else:
-                    reassign_params['p'] = self.p_isco_fraction * p_isco
-            
-                    if self.verbose:
-                        print("Setting p =", reassign_params['p'], "for p_isco_frac", self.p_isco_fraction)
-           
-           
-            if self.p_mb_fraction is not None or 'pmbfrac' in self.grid_param:
-
-                #if 's' not a grid parameter, use the static value
-                if 's' in self.grid_param:
-                    s = grid_pt_dict['s']
-                else:
-                    s = self.params['s']
-                    
-                p_mb = 2 - s + 2 * (1 - s)**0.5
-
-                if 'pmbfrac' in self.grid_param:
-                    reassign_params['p'] = grid_pt_dict['pmbfrac'] * p_mb
-
-                    reassign_params.pop('pmbfrac')
-
-                    if self.verbose:
-                        print("Setting p =", reassign_params['p'], "for p_mb_frac", grid_pt_dict['pmbfrac'])
-
-                #or else use the fixed value
-                else:
-                    reassign_params['p'] = self.p_mb_fraction * p_isco
-
-                    if self.verbose:
-                        print("Setting p =", reassign_params['p'], "for p_mb_frac", self.p_mb_fraction)
-
-
+            #try changing parameters of waveform and regenerating
             try:
                     
                 self.ds.change_params(reassign_params, fname=self.fname+str(i), \
@@ -373,6 +323,96 @@ class GenerateSpectra(object):
                 
                 exec("self.{}_dset[{:d}] = {}".format(key, i, grid_pt_dict[key]))
 
+    def fractional_p_isco(self, reassign_params, grid_pt_dict):
+        
+        #if 's' not a grid parameter, use the static value
+        if 's' in self.grid_param:
+            s = grid_pt_dict['s']
+        else:
+            s = self.params['s']
+
+        #equations grabbed from wikipedia
+        z1 = 1 + (1 - s**2)**(1/3) * \
+                ((1 + s)**(1/3) + \
+                (1 - s)**(1/3))
+
+        z2 = np.sqrt(3 * s**2 + z1**2)
+
+        #gonna assume everything is prograde
+        p_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
+
+        #assign according to grid parameter
+        if 'piscofrac' in self.grid_param:
+
+            reassign_params['p'] = grid_pt_dict['piscofrac'] * p_isco
+
+            reassign_params.pop('piscofrac')
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for p_isco_frac", grid_pt_dict['piscofrac'])
+
+        #or else use the fixed value
+        else:
+            
+            reassign_params['p'] = self.p_isco_fraction * p_isco
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for p_isco_frac", self.p_isco_fraction)
+
+        return reassign_params
+
+    def fractional_p_mb(self, reassign_params, grid_pt_dict):
+
+        #if 's' not a grid parameter, use the static value
+        if 's' in self.grid_param:
+            s = grid_pt_dict['s']
+        else:
+            s = self.params['s']
+
+        p_mb = 2 - s + 2 * (1 - s)**0.5
+
+        if 'pmbfrac' in self.grid_param:
+            reassign_params['p'] = grid_pt_dict['pmbfrac'] * p_mb
+
+            reassign_params.pop('pmbfrac')
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for p_mb_frac", grid_pt_dict['pmbfrac'])
+
+        #or else use the fixed value
+        else:
+            reassign_params['p'] = self.p_mb_fraction * p_isco
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for p_mb_frac", self.p_mb_fraction)
+
+        return reassign_params    
+
+
+    def fix_semimajor_axis(self, reassign_params, grid_pt_dict):
+
+        if 'e' in self.grid_param:
+            e = grid_pt_dict['e']
+        else:
+            e = self.params['e']
+
+        if 'fixsma' in self.grid_param:
+        
+            reassign_params['p'] = grid_pt_dict['fixsma'] * (1. - e**2)
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for fixed sma", grid_pt_dict['fix_sma'])
+
+
+        else:
+
+            reassign_params['p'] = self.fix_sma * (1. - e**2)
+
+            if self.verbose:
+                print("Setting p =", reassign_params['p'], "for fixed sma", self.fix_sma)
+
+        return reassign_params
+
 
 def parser():
     """
@@ -402,7 +442,8 @@ def parser():
         'alpha': float, 
         'D': float, 
         'piscofrac': float,
-        'pmbfrac': float}
+        'pmbfrac': float, 
+        'fixsma': float}
 
 
     ########## Parser ##################
@@ -413,8 +454,11 @@ def parser():
     parser.add_argument("--use-cl", action='store_true', help="use command line waveform generation")
     parser.add_argument("--grid-param", type=str, action="append", help="param to grid over")
     parser.add_argument("--log-scale-param", type=str, action="append", help="use log spacing for this params on grid")
+    
     parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
     parser.add_argument("--p-mb-fraction", default=None, help="fix value of marginally bound radius")
+    parser.add_argument("--fix-sma", default=None, help="fix semimajor axis")
+    
     parser.add_argument("--store-wf", action='store_true', help="save gw polarizations")
     parser.add_argument("--n-grid", nargs="+", type=int, help="number of points for each param on grid")
     parser.add_argument("--power-cutoff", type=float, default=-8, help="log cutoff point for power spectrum (powers smaller than this will be discarded)")

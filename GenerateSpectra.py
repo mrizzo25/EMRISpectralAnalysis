@@ -49,7 +49,11 @@ class GenerateSpectra(object):
 
         #which params to log scale, if any
         self.log_scale_param = args.log_scale_param
-        
+
+        self.p_isco_fraction = args.p_isco_fraction
+        self.p_mb_fraction = args.p_mb_fraction
+        self.fix_sma = args.fix_sma
+    
         if self.p_isco_fraction is not None:
             self.p_isco_fraction = float(self.p_isco_fraction)
 
@@ -58,10 +62,6 @@ class GenerateSpectra(object):
 
         if self.fix_sma is not None:
             self.fix_sma = float(self.fix_sma)
-
-        self.p_isco_fraction = args.p_isco_fraction
-        self.p_mb_fraction = args.p_mb_fraction
-        self.fix_sma = args.fix_sma
 
         self.store_wf = args.store_wf
         self.power_cutoff = args.power_cutoff

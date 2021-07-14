@@ -39,8 +39,24 @@ class GenerateSingleSpectrum(object):
                 self.params[key] = vars(args)[key]
                 print("Reassigning {}: {}".format(key, self.params[key]))
 
+        self.p_isco_fraction = args.p_isco_fraction
+        self.p_mb_fraction = args.p_mb_fraction
+        self.fix_sma = args.fix_sma
+    
+        #reassign p using special conditions
+        if self.p_isco_fraction is not None:
+            self.p_isco_fraction = float(self.p_isco_fraction)
+            self.fractional_p_isco()
+
+        if self.p_mb_fraction is not None:
+            self.p_mb_fraction = float(self.p_mb_fraction)
+            self.fractional_p_mb()
+
+        if self.fix_sma is not None:
+            self.fix_sma = float(self.fix_sma)
+            self.fix_semimajor_axis()
         
-        #initialize spectra binning obj
+        #initialize spectra generation
         if self.angle_avg:
             #use angle averaging
             self.ds = DiscretizeSpectra(self.params, fname=self.fname, \
@@ -215,6 +231,50 @@ class GenerateSingleSpectrum(object):
                 .format(p, p, p))
 
 
+    def fractional_p_isco(self):
+        
+        #if 's' not a grid parameter, use the static value
+        s = self.params['s']
+
+        #equations grabbed from wikipedia
+        z1 = 1 + (1 - s**2)**(1/3) * \
+                ((1 + s)**(1/3) + \
+                (1 - s)**(1/3))
+
+        z2 = np.sqrt(3 * s**2 + z1**2)
+
+        #gonna assume everything is prograde
+        p_isco = (3 + z2 - np.sqrt((3. - z1) * (3. + z1 + 2. * z2)))
+
+        
+        self.params['p'] = self.p_isco_fraction * p_isco
+
+        if self.verbose:
+            print("Setting p =", self.params['p'], "for p_isco_frac", self.p_isco_fraction)
+
+
+
+    def fractional_p_mb(self):
+
+        s = self.params['s']
+
+        p_mb = 2 - s + 2 * (1 - s)**0.5
+
+        self.params['p'] = self.p_mb_fraction * p_isco
+       
+        if self.verbose:
+            print("Setting p =", self.params['p'], "for p_mb_frac", self.p_mb_fraction)
+
+
+    def fix_semimajor_axis(self):
+
+        e = self.params['e']
+
+        self.params['p'] = self.fix_sma * (1 - e**2)  
+
+        if self.verbose:
+            print("Setting p =", self.params['p'], "for fixed sma", self.fix_sma)
+
 
 def parser():
     """
@@ -249,6 +309,11 @@ def parser():
     parser.add_argument("--save-fig", action='store_true', help="save strain and spectra plots")
     parser.add_argument("--fname", type=str, help='filename of output')
     parser.add_argument("--use-cl", action='store_true', help="generate wf using command line")
+    
+    parser.add_argument("--p-isco-fraction", default=None, help="fix slr to fractional value of isco slr")
+    parser.add_argument("--p-mb-fraction", default=None, help="fix value of marginally bound radius")
+    parser.add_argument("--fix-sma", default=None, help="fix semimajor axis")
+
     parser.add_argument("--angle-avg", action='store_true')
     parser.add_argument("--output-phases", action='store_true', help='save phase data along with waveform data')
     parser.add_argument("--scatter", action='store_true', help="generate spectra scatter plot")
